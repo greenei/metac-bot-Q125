@@ -1,5 +1,15 @@
 #CELL 1
-
+import datetime
+import json
+import os
+import requests
+import re
+from asknews_sdk import AskNewsSDK
+import textwrap
+import time
+import anthropic
+import pandas as pd
+import numpy as np
 ## CONSTANTS
 SUBMIT_PREDICTION = True # set to True to publish your predictions to Metaculus
 FORECAST_TOURNAMENT = True # set to True to forecast all tournament questions
@@ -622,17 +632,6 @@ IMPORTANT: Do not report anything else! Do not include reasoning! Your response 
 """
 
 #CELL 2
-import datetime
-import json
-import os
-import requests
-import re
-from asknews_sdk import AskNewsSDK
-import textwrap
-import time
-import anthropic
-import pandas as pd
-import numpy as np
 
 AUTH_HEADERS = {"headers": {"Authorization": f"Token {METACULUS_TOKEN}"}}
 API_BASE_URL = "https://www.metaculus.com/api"
