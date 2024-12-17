@@ -1894,10 +1894,6 @@ else:
   # (8529, 8529) Metaculus meetup
   # (29050, 29140) covid hospitalization
 
-if GET_NEWS == True:
-  ASKNEWS_CLIENT_ID = userdata.get('ASKNEWS_CLIENT_ID')
-  ASKNEWS_SECRET = userdata.get('ASKNEWS_SECRET')
-
 for question_id, post_id in forecast_questions_ids:
 
   question_details = get_question_details(question_id)
