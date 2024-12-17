@@ -8,7 +8,13 @@ from google.colab import userdata
 METACULUS_TOKEN = userdata.get('METACULUS_TOKEN')
 PERPLEXITY_API_KEY = userdata.get('PERPLEXITY_API_KEY')
 
+## CONSTANTS
 
+SUBMIT_PREDICTION = True # set to True to publish your predictions to Metaculus
+FORECAST_TOURNAMENT = True # set to True to forecast all tournament questions
+GET_NEWS = True # set to True to enable AskNews after entering ASKNEWS secrets
+num_runs=5 # number of times to run the LLM
+ONLY_NEW=1 # Only predict on new questions
 
 ## LLM Prompt
 
@@ -1873,12 +1879,6 @@ print(f'open_question_id_post_id: {open_question_id_post_id}')
 
 
 # Cell 4
-SUBMIT_PREDICTION = True # set to True to publish your predictions to Metaculus
-FORECAST_TOURNAMENT = True # set to True to forecast all tournament questions
-GET_NEWS = True # set to True to enable AskNews after entering ASKNEWS secrets
-num_runs=5 # number of times to run the LLM
-ONLY_NEW=0 # Only predict on new questions
-
 # The list of questions to forecast
 forecast_questions_ids = []
 if FORECAST_TOURNAMENT == True:
