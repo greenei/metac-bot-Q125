@@ -8,7 +8,6 @@ from asknews_sdk import AskNewsSDK
 import textwrap
 import time
 import anthropic
-import pandas as pd
 import numpy as np
 ## CONSTANTS
 SUBMIT_PREDICTION = True # set to True to publish your predictions to Metaculus
