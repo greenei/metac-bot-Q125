@@ -1324,7 +1324,7 @@ IMPORTANT: YOUR LAST WORD MUST BE THE ID AND NOTHING ELSE. THIS IS VERY IMPORTAN
 
 # Updated function to match your previous Perplexity setup
 def call_perplexity_with_messages(messages: list) -> str:
-    PERPLEXITY_API_KEY = userdata.get("PERPLEXITY_API_KEY")
+    PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
     if not PERPLEXITY_API_KEY:
         print("PERPLEXITY_API_KEY is not set.")
         return "No information found."
