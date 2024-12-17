@@ -1,3 +1,624 @@
+#CELL 1
+!pip install -qU openai asknews anthropic
+
+## Load API keys from secrets
+
+# Make sure you have set these in the sidebar to the left, by pressing the key icon.
+from google.colab import userdata
+METACULUS_TOKEN = userdata.get('METACULUS_TOKEN')
+PERPLEXITY_API_KEY = userdata.get('PERPLEXITY_API_KEY')
+
+
+
+## LLM Prompt
+
+PROMPT_TEMPLATE = """
+IMPORTANT: Assume that today is {today}.
+
+You are a professional forecaster. You read the question very carefully and understand it.
+You are hard working and don't take short cuts. You follow all instructions precisely. Your answer can be long. Make sure to take as much space as you need.
+I will mark some instructions as IMPORTANT. Make sure that you pay special attention here and follow closely, as you had trouble following these in the past!
+Thank you!
+
+First, you state the question, background information, and resolution criteria.
+
+Your question is:
+{title}
+
+Background:
+{background}
+
+Resolution criteria:
+{resolution_criteria}
+
+Make sure that you have properly understood the question, background, and resolution criteria.
+
+IMPORTANT: Example of Resolution:
+If there is a formula that is relevant for grading the question, state it explicitely. Provide an example for the individual factors making up the formula. Calculate how the question would be resolved.
+
+You ALWAYS forecast questions according to the following procedure, you do not skip any step or substep:
+
+1. State the current date, the date when the outcome to the question is known, and the number of days in between. Check whether there is reliable and current betting odds/metaculus probabilities on the question to form a prior. Take the betting odds and calculate an implied probability, while keeping in mind house edge.
+If the question is an exact match (same question, same date, same resolution criteria, etc.) to the betting odds, do not change it further and just report it. In this case, you should be relatively certain about your estimate.
+Otherwise, try to form a prior while considering the betting odds and continue with step 2.IMPORTANT: When considering predictions for different time frames, ALWAYS state the implied base rate on a monthly or yearly basis. Then form your prior based on that.
+The closer the question can be matched to the betting odds question, the less should you change your opinion
+with new information from steps 3+.
+
+State your current estimate in % form and your current certainty [0-10].
+
+2.If there are no betting odds/metaculus probabilities, form a prior from your general knowledge of the world. How likely is it that the question resolves positively in general?
+How strong is your prior? If your prior is strong, don't let the next steps influence you too much. IMPORTANT: If your assistants disagree, don't rely on their info too strongly!
+
+Before stating your prior, first state:
+(a) The number of days until the outcome is known.
+(b) What the outcome would be if nothing changed.
+(c) Consider whether it is reasonable that the outcome would change in the given timeframe. What is your prior given year on year base rates?
+(d) If the question relates to a specific date, consider the cases that 1/4th of the time was left and that 4 times the time was left. What would your prior be then? Note that oftentimes more time means more chances for something to happen. This may increase the probability.
+(e) How many days would have to be left such that the question has a 50% probability of being resolved positively? Usually, more time makes it more likely that something happens.
+
+State your current estimate in % form and your current certainty [0-10].
+
+3. Use the news output from your research assistant and update the prior with the new information, depending on how relevant and trustworthy the information is. Consider whether sources may be biased. In general, there might be a slight pro left-wing bias in western sources and pro governemnt biases in general.
+
+State your current estimate in % form and your current certainty [0-10].
+
+4. Calculate X=min(12-current certainty,0.3 times your current estimate)
+Consider that you have a bias towards things happening more often than they actually happen.
+Account for it by lowering your estimate by X percentage points.
+
+State your current estimate in % form and your current certainty [0-10].
+
+Fine print:
+{fine_print}
+
+Your Metaculus assistant says:
+{meta_assistant}
+
+Average predictions from Metaculus Quarterly Cup:
+
+{predictions_full}
+
+Further information that may help to update the prior from your assistants. IMPORTANT: Be careful with this information if the assistants disagree!
+
+Assistant 1:
+
+{prior_info}
+
+Assistant 2:
+
+{prior_info2}
+
+Your news sources say:
+{summary_report}
+
+
+IMPORTANT: The last thing you write is your final answer to the original question EXACTLY as: "Probability: ZZ%", ZZ in 0-100, integer (NO COMMA OR DOT), IMPORTANT: DO NOT FORGET THE % SIGN OR THE PREDICTION WON'T COUNT!
+
+"""
+
+## LLM Prompt
+
+PROMPT_TEMPLATE_NUMERIC = """
+IMPORTANT: Assume that today is {today}.
+
+You are a professional forecaster. You read the question very carefully and understand it.
+You are hard working and don't take short cuts. You follow all instructions precisely. Your answer can be long. Make sure to take as much space as you need.
+I will mark some instructions as IMPORTANT. Make sure that you pay special attention here and follow closely, as you had trouble following these in the past!
+Thank you!
+
+First, you state the question, background information, and resolution criteria.
+
+Your question is:
+{title}
+
+Background:
+{background}
+
+Resolution criteria:
+{resolution_criteria}
+
+Make sure that you have properly understood the question, background, and resolution criteria. You will answer a NUMERIC question, meaning that you give all of your answers as percentiles as so:
+"
+Percentile 10: XX
+Percentile 20: XX
+Percentile 40: XX
+Percentile 60: XX
+Percentile 80: XX
+Percentile 90: XX
+"
+
+IMPORTANT: Sometimes the unit in which the question should be answered is unclear beacuse the question is poorly posed. Most of the mass of the question should lie between {scaling_min} and {scaling_max}.
+Based on this, state the unit that you believe is most likely for this question. Answer the question in this unit going forth.
+
+{lower_bound_message}
+{upper_bound_message}
+
+IMPORTANT: Example of Resolution:
+If there is a formula that is relevant for grading the question, state it explicitely. Provide an example for the individual factors making up the formula. Calculate how the question would be resolved.
+
+You ALWAYS forecast questions according to the following procedure, you do not skip any step or substep:
+
+1. State the current date, the date when the outcome to the question is known, and the number of days in between. Check whether there is reliable and current betting odds/metaculus probabilities on the question to form a prior. Take the betting odds and calculate an implied probability, while keeping in mind house edge.
+If the question is an exact match (same question, same date, same resolution criteria, etc.) to the betting odds, do not change it further and just report it. In this case, you should be relatively certain about your estimate.
+Otherwise, try to form a prior while considering the betting odds and continue with step 2.IMPORTANT: When considering predictions for different time frames, ALWAYS state the implied base rate on a monthly or yearly basis. Then form your prior based on that.
+The closer the question can be matched to the betting odds question, the less should you change your opinion
+with new information from steps 2+.
+
+State your current estimate and your current certainty [0-10].
+
+2.If there are no betting odds/metaculus probabilities, form a prior from your general knowledge of the world.
+How strong is your prior? If your prior is strong, don't let the next steps influence you too much. IMPORTANT: If your assistants disagree, don't rely on their info too strongly!
+
+Before stating your prior, first state:
+(a) The number of days until the outcome is known.
+(b) What the outcome would be if nothing changed.
+(c) Consider whether it is reasonable that the outcome would change in the given timeframe. What is your prior given year on year base rates?
+(d) If the question relates to a specific date, consider the cases that 1/4th of the time was left and that 4 times the time was left. What would your prior be then? Note that oftentimes more
+time means more chances for something to happen. This may increase the probability for change.
+
+State your current estimate and your current certainty [0-10].
+
+3. Use the news output from your research assistant and update the prior with the new information, depending on how relevant and trustworthy the information is.
+Consider whether sources may be biased. In general, there might be a slight pro left-wing bias in western sources and pro governemnt biases in general.
+
+State your current estimate and your current certainty [0-10].
+
+Fine print:
+{fine_print}
+
+Your Metaculus assistant says:
+{meta_assistant}
+
+Average predictions from Metaculus Quarterly Cup:
+
+{predictions_full}
+
+Further information that may help to update the prior from your assistants. IMPORTANT: Be careful with this information if the assistants disagree!
+
+Assistant 1:
+
+{prior_info}
+
+Assistant 2:
+
+{prior_info2}
+
+Your news sources say:
+{summary_report}
+
+
+IMPORTANT: The last thing you write is your final answer to the original question (XX) EXACTLY as:
+
+"
+Percentile 10: XX
+Percentile 20: XX
+Percentile 40: XX
+Percentile 60: XX
+Percentile 80: XX
+Percentile 90: XX
+"
+
+Do not put "%" or any other unit after the numbers! Note that it is usually better to be careful with predictions.
+This means that low percentiles should not be too high and high percentiles should not be too low compared to your median prediction.
+Only choose very concentrated density functions if you are very sure.
+
+"""
+
+## MC
+
+PROMPT_TEMPLATE_MC = """
+IMPORTANT: Assume that today is {today}.
+
+You are a professional forecaster. You read the question very carefully and understand it.
+You are hard working and don't take short cuts. You follow all instructions precisely. Your answer can be long. Make sure to take as much space as you need.
+I will mark some instructions as IMPORTANT. Make sure that you pay special attention here and follow closely, as you had trouble following these in the past!
+Thank you!
+
+First, you state the question, your options, background information, and resolution criteria.
+
+Your question is:
+{title}
+
+With options:
+{options}
+
+Background:
+{background}
+
+Resolution criteria:
+{resolution_criteria}
+
+Make sure that you have properly understood the question, your options, background, and resolution criteria. You will answer a MULTIPLE CHOICE question, meaning
+that you give all of your answers as probabilities that sum up to 100% as so:
+
+Option_A: Probability_A
+Option_B: Probability_B
+...
+Option_N: Probability_N
+
+IMPORTANT: Probabilities must always sum up to 100%!
+
+IMPORTANT: Example of Resolution:
+If there is a formula that is relevant for grading the question, state it explicitely. Provide an example for the individual factors making up the formula. Calculate how the question would be resolved.
+
+You ALWAYS forecast questions according to the following procedure, you do not skip any step or substep:
+
+1. State the current date, the date when the outcome to the question is known, and the number of days in between. Check whether there is reliable and current betting odds/metaculus probabilities on the question to form a prior. Take the betting odds and calculate an implied probability, while keeping in mind house edge.
+If the question is an exact match (same question, same date, same resolution criteria, etc.) to the betting odds, do not change it further and just report it. In this case, you should be relatively certain about your estimate.
+Otherwise, try to form a prior while considering the betting odds and continue with step 2.IMPORTANT: When considering predictions for different time frames, ALWAYS state the implied base rate on a monthly or yearly basis. Then form your prior based on that.
+The closer the question can be matched to the betting odds question, the less should you change your opinion
+with new information from steps 2+.
+
+State your current estimate and your current certainty [0-10].
+
+2.If there are no betting odds/metaculus probabilities, form a prior from your general knowledge of the world.
+How strong is your prior? If your prior is strong, don't let the next steps influence you too much. IMPORTANT: If your assistants disagree, don't rely on their info too strongly!
+
+Before stating your prior, first state:
+(a) The number of days until the outcome is known.
+(b) What the outcome would be if nothing changed.
+(c) Consider whether it is reasonable that the outcome would change in the given timeframe. What is your prior given year on year base rates?
+(d) If the question relates to a specific date, consider the cases that 1/4th of the time was left and that 4 times the time was left. What would your prior be then? Note that oftentimes more
+time means more chances for something to happen. This may increase the probability for change.
+
+State your current estimate and your current certainty [0-10].
+
+3. Use the news output from your research assistant and update the prior with the new information, depending on how relevant and trustworthy the information is.
+Consider whether sources may be biased. In general, there might be a slight pro left-wing bias in western sources and pro governemnt biases in general.
+
+State your current estimate and your current certainty [0-10].
+
+Fine print:
+{fine_print}
+
+Your Metaculus assistant says:
+{meta_assistant}
+
+Average predictions from Metaculus Quarterly Cup:
+
+{predictions_full}
+
+Further information that may help to update the prior from your assistants. IMPORTANT: Be careful with this information if the assistants disagree!
+
+Assistant 1:
+
+{prior_info}
+
+Assistant 2:
+
+{prior_info2}
+
+Your news sources say:
+{summary_report}
+
+
+IMPORTANT: The last thing you write is your final answer to the original question EXACTLY as:
+
+Option_A: Probability_A
+Option_B: Probability_B
+...
+Option_N: Probability_N
+
+"""
+
+## Prior prompt
+
+PROMPT_PRIOR = """
+IMPORTANT: Assume that today is {today}.
+
+You are an assistant to a superforecaster, you do not produce predictions yourself. Be concise and precise. No hints or other commentary.
+Construct a single prompt on the single most important topic that allows the superforecaster to search the web for information that will help him to forecast.
+If the question relates to the decision making of some entity, always consider important dates regarding decision making.
+It is better to include only the most relevant keywords in your prompt than too many unimportant ones. Keep it simple.
+Consider whether info from the question may be outdated.
+
+
+Your question is:
+{title}
+
+With options:
+{options}
+
+Background:
+{background}
+
+Resolution criteria:
+{resolution_criteria}
+
+Fine_print:
+{fine_print}
+
+Your answer should be the prompt, which will be delivered to a search engine. Do not include any further reasoning or anything else, only the prompt.
+
+"""
+
+## News aggregator
+
+PROMPT_NEWS_AGG = """ You are an assistant to a superforecaster. The forecaster wants to make a prediction for the question:{title}
+
+With options:
+{options}
+
+Background:
+{background}
+
+Resolution criteria:
+{resolution_criteria}
+
+Fine_print:
+{fine_print}
+
+Your job is to write a summary for the important pieces of news that relate to the question.
+The news articles are:
+{summary_report}
+
+"""
+
+## Fact checker
+
+PROMPT_FACT_CHECKER = """
+IMPORTANT: Assume that today is {today}.
+
+A superforecaster has made a prediction for the question: {title}
+
+Your job is to critically evaluate the forecaster's prediction.
+
+1. State: the current date, the date when the outcome to the question is known, and the number of days in between.
+
+2. If the forecaster used Metaculus predictions to inform his prior, did he properly account for differences between the question at hand and the predictions? Did he consider proper base rates?
+IMPORTANT: If he used Metaculus predictions and they were highly relevant to the question, the prediction of the forecaster should not differ much from the Metaculus predictions!
+
+3. Is the forecaster's logic sound?
+
+4. Did he use all important information?
+
+5. Did he properly assess the importance of different pieces of information?
+
+6. Did he properly consider the available timeframe until the question is resolved? Pay special attention to this. Many questions have a short timeframe, which strongly limits the probability
+that the question resolves positively. Reason through this in detail. IMPORTANT: If the question asks about an event that has already resolved but you don't know how, a reasonable estimate should
+nevertheless be provided. Do not answer 0% in this case!
+
+7. Are the predictions consistent with the predictions for the other questions?
+
+8. Did the assisstants agree or disagree? Did the forecaster handle major disagreement with care by updating less strongly on the assistants' information?
+
+Here is the forecaster's rationale:
+
+{rationale}
+
+Here is more information that the forecaster had available.
+
+Background:
+{background}
+
+Resolution criteria:
+{resolution_criteria}
+
+Fine_print:
+{fine_print}
+
+
+Your Metaculus assistant says:
+{meta_assistant}
+
+Average predictions from Metaculus Quarterly Cup:
+
+{predictions_full}
+
+Further information that may help to update the prior from your assistants. IMPORTANT: Be careful with this information if the assistants disagree!
+
+Assistant 1:
+
+{prior_info}
+
+Assistant 2:
+
+{prior_info2}
+
+Your news sources say:
+{summary_report}
+
+Critically evaluate the forecaster's prediction. IMPORTANT: Be sure to stay consistent with old predictions for related questions!
+The sum of questions that are both mututally exclusive and exhaustive must be 100%!
+
+At the end, do the following without further commentary!
+
+If you see no room for improvement, state the forecaster's prediction EXACTLY as: "Probability: ZZ%", ZZ in 0-100, integer (NO COMMA OR DOT), IMPORTANT: DO NOT FORGET THE % SIGN OR THE PREDICTION WON'T COUNT!.
+
+If you see room for improvement, state your updated prediction EXACTLY as: "Probability: ZZ%", ZZ in 0-100, integer (NO COMMA OR DOT), IMPORTANT: DO NOT FORGET THE % SIGN OR THE PREDICTION WON'T COUNT!.
+
+"""
+
+## Fact checker
+
+PROMPT_FACT_CHECKER_NUMERIC = """
+IMPORTANT: Assume that today is {today}.
+
+A superforecaster has made a prediction for the question: {title}
+
+Your job is to critically evaluate the forecaster's prediction.
+
+1. State: the current date, the date when the outcome to the question is known, and the number of days in between.
+
+2. If the forecaster used Metaculus predictions to inform his prior, did he properly account for differences between the question at hand and the predictions? Did he consider proper base rates?
+IMPORTANT: If he used Metaculus predictions and they were highly relevant to the question, the prediction of the forecaster should not differ much from the Metaculus predictions!
+
+3. Is the forecaster's logic sound?
+
+4. Did he use all important information?
+
+5. Did he properly assess the importance of different pieces of information?
+
+6. Did he properly consider the available timeframe until the question is resolved? Pay special attention to this. Many questions have a short timeframe, which strongly limits the probability
+that things change from their current situation! Reason through this in detail. IMPORTANT: If the question asks about an event that has already resolved but you don't know how, a reasonable estimate should
+nevertheless be provided. Do not answer 0% in this case!
+
+7. Did the assisstants agree or disagree? Did the forecaster handle major disagreement with care by updating less strongly on the assistants' information?
+
+Here is the forecaster's rationale:
+
+{rationale}
+
+Here is more information that the forecaster had available.
+
+Background:
+{background}
+
+Resolution criteria:
+{resolution_criteria}
+
+Fine_print:
+{fine_print}
+
+Your Metaculus assistant says:
+{meta_assistant}
+
+Average predictions from Metaculus Quarterly Cup:
+
+{predictions_full}
+
+Further information that may help to update the prior from your assistants. IMPORTANT: Be careful with this information if the assistants disagree!
+
+Assistant 1:
+
+{prior_info}
+
+Assistant 2:
+
+{prior_info2}
+
+Your news sources say:
+{summary_report}
+
+Critically evaluate the forecaster's prediction.
+
+At the end, do the following without further commentary! Do not put "%" after the numbers!
+
+If you see no room for improvement, state the forecaster's prediction (XX) EXACTLY as:
+
+"
+Percentile 10: XX
+Percentile 20: XX
+Percentile 40: XX
+Percentile 60: XX
+Percentile 80: XX
+Percentile 90: XX
+"
+
+If you see room for improvement, state your updated prediction (XX) EXACTLY as:
+
+"
+Percentile 10: XX
+Percentile 20: XX
+Percentile 40: XX
+Percentile 60: XX
+Percentile 80: XX
+Percentile 90: XX
+"
+
+Note that it is usually better to be careful with predictions.
+This means that low percentiles should not be too high and high percentiles should not be too low compared to your median prediction.
+Only choose very concentrated density functions if you are very sure.
+
+"""
+
+## Fact checker
+
+PROMPT_FACT_CHECKER_MC = """
+IMPORTANT: Assume that today is {today}.
+
+A superforecaster has made a prediction for the question: {title}
+
+Your job is to critically evaluate the forecaster's prediction.
+
+1. State: the current date, the date when the outcome to the question is known, and the number of days in between.
+
+2. If the forecaster used Metaculus predictions to inform his prior, did he properly account for differences between the question at hand and the predictions? Did he consider proper base rates?
+IMPORTANT: If he used Metaculus predictions and they were highly relevant to the question, the prediction of the forecaster should not differ much from the Metaculus predictions!
+
+3. Is the forecaster's logic sound?
+
+4. Did he use all important information?
+
+5. Did he properly assess the importance of different pieces of information?
+
+6. Did he properly consider the available timeframe until the question is resolved? Pay special attention to this. Many questions have a short timeframe, which strongly limits the probability
+that things change from their current situation! Reason through this in detail. IMPORTANT: If the question asks about an event that has already resolved but you don't know how, a reasonable estimate should
+nevertheless be provided. Do not answer 0% in this case!
+
+7. Did the assisstants agree or disagree? Did the forecaster handle major disagreement with care by updating less strongly on the assistants' information?
+
+8. IMPORTANT: Do the probabilities sum up to 100%? They must! Only provide probabilities that sum up to 100%!
+
+Here is the forecaster's rationale:
+
+{rationale}
+
+Here is more information that the forecaster had available.
+
+Background:
+{background}
+
+Resolution criteria:
+{resolution_criteria}
+
+Fine_print:
+{fine_print}
+
+Your Metaculus assistant says:
+{meta_assistant}
+
+Average predictions from Metaculus Quarterly Cup:
+
+{predictions_full}
+
+Further information that may help to update the prior from your assistants. IMPORTANT: Be careful with this information if the assistants disagree!
+
+Assistant 1:
+
+{prior_info}
+
+Assistant 2:
+
+{prior_info2}
+
+Your news sources say:
+{summary_report}
+
+Critically evaluate the forecaster's prediction.
+
+At the end, do the following without further commentary!
+
+If you see no room for improvement, state the forecaster's prediction in this order {options} EXACTLY as:
+
+Option_A: Probability_A
+Option_B: Probability_B
+...
+Option_N: Probability_N
+
+If you see room for improvement, state your updated prediction in this order {options} EXACTLY as:
+
+Option_A: Probability_A
+Option_B: Probability_B
+...
+Option_N: Probability_N
+
+"""
+## META checker
+
+PROMPT_META_CHECKER = """
+Assume that today is {today}. You are an assistant to a forecaster.
+
+Today's questions are: {predictions_section}
+
+Open questions on Metaculus are: {meta_open}
+
+Your job is to report the id's of Metaculus questions that are related to today's questions. Report them as as a list with "ID:" in front of every id. Example: "ID: 23412 ID: 34555"
+IMPORTANT: Do not report anything else! Do not include reasoning! Your response will be directly used in the pipeline.
+
+"""
+
+#CELL 2
 import datetime
 import json
 import os
@@ -1186,3 +1807,121 @@ def list_questions(tournament_id, offset=0, count=50) -> list[dict]:
         raise Exception(response.text)
     data = json.loads(response.content)
     return data
+
+# Cell 3
+TOURNAMENT_ID = 32506  # 32506 is the tournament ID for Q4 AI Benchmarking
+#TOURNAMENT_ID = 3672 # Quarterly Cup
+#TOURNAMENT_ID = 2844 # ACX for testing
+
+# @title Get all open questions from the tournament (TOURNAMENT_ID)
+
+posts = list_posts(tournament_id=TOURNAMENT_ID)
+
+print(posts["results"])
+
+post_dict = dict()
+for post in posts["results"]:
+  print(f'question_id: {post["question"]["id"]} post_id: {post["id"]}.  \n')
+  if question := post.get("question"):
+      # single question post
+      post_dict[post["id"]] = [question]
+
+#print(f'post_dict: {post_dict}')
+
+open_question_id_post_id = [] # [(question_id, post_id)]
+new_question_id_post_id = []
+for post_id, questions in post_dict.items():
+    for question in questions:
+        if question.get("status") == "open":
+          print(
+              f"ID: {question['id']}\nQ: {question['title']}\nCloses: "
+              f"{question['scheduled_close_time']}"
+          )
+          open_question_id_post_id.append((question["id"], post_id))
+
+questions=list_questions(TOURNAMENT_ID)
+new_questions_ids = []
+open_questions_ids = []
+for question in questions["results"]:
+    if question["status"] == "open":
+        print(f"ID: {question['id']}\nQ: {question['title']}\nCloses: {question['scheduled_close_time']}")
+        open_questions_ids.append(question["id"])
+
+        # Check if you've made a prediction for this question
+        BASE_URL = f"https://www.metaculus.com/api2"
+        guess_response = requests.get(
+            f"{BASE_URL}/questions/{question['id']}/",
+            headers={"Authorization": f"Token {METACULUS_TOKEN}"}
+        )
+        guess_response.raise_for_status()
+
+        if not guess_response.json().get("question", {}).get("my_forecasts", {}).get("latest"):
+            new_questions_ids.append(question["id"])
+
+print(f"New questions without predictions: {len(new_questions_ids)}")
+print(new_questions_ids)
+
+new_question_id_post_id = [
+    entry for entry in open_question_id_post_id if entry[1] in new_questions_ids
+]
+
+print("Matching Entries:")
+for entry in new_question_id_post_id:
+    print(f"Question ID: {entry[0]}, Post ID: {entry[1]}")
+
+print(f'open_question_id_post_id: {open_question_id_post_id}')
+
+
+# Cell 4
+SUBMIT_PREDICTION = True # set to True to publish your predictions to Metaculus
+FORECAST_TOURNAMENT = True # set to True to forecast all tournament questions
+GET_NEWS = True # set to True to enable AskNews after entering ASKNEWS secrets
+num_runs=5 # number of times to run the LLM
+ONLY_NEW=0 # Only predict on new questions
+
+# The list of questions to forecast
+forecast_questions_ids = []
+if FORECAST_TOURNAMENT == True:
+    if ONLY_NEW:
+      forecast_questions_ids = new_question_id_post_id
+    else:
+      forecast_questions_ids = open_question_id_post_id
+else:
+  forecast_questions_ids = [(30270, 30477)]
+  # question_id: 30270 post_id: 30477 (Biden EO)
+  # question_id: 30300 post_id: 30516 (Trump)
+  # [(28571, 28571)] # (question_id, post_id)
+  # [(28997, 29077)] brazil
+  # (29480, 29608) elon
+  # (28953, 29028) arms sales
+  # (28571, 28571) SSE
+  # (29051, 29141) Influenza A
+  # (8529, 8529) Metaculus meetup
+  # (29050, 29140) covid hospitalization
+
+if GET_NEWS == True:
+  ASKNEWS_CLIENT_ID = userdata.get('ASKNEWS_CLIENT_ID')
+  ASKNEWS_SECRET = userdata.get('ASKNEWS_SECRET')
+
+for question_id, post_id in forecast_questions_ids:
+
+  question_details = get_question_details(question_id)
+  title = question_details["title"]
+  resolution_criteria = question_details["resolution_criteria"]
+  background = question_details["description"]
+  fine_print = question_details["fine_print"]
+  question_type = question_details["type"]
+  if question_type == "multiple_choice":
+    options = question_details["options"]
+    print(f"options: {options}")
+
+  print(f"----------\nQuestion: {title}")
+
+  forecast, comment = get_gpt_prediction(question_details,question_id, num_runs)
+
+  print(f"Forecast: {forecast}")
+  print(f"Comment: {comment}")
+
+  forecast_payload = create_forecast_payload(forecast, question_type)
+  post_question_prediction(question_details["id"], forecast_payload)
+  post_question_comment(post_id, comment)
