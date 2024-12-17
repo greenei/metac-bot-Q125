@@ -1,13 +1,4 @@
 #CELL 1
-!pip install -qU openai asknews anthropic
-
-## Load API keys from secrets
-
-# Make sure you have set these in the sidebar to the left, by pressing the key icon.
-from google.colab import userdata
-METACULUS_TOKEN = userdata.get('METACULUS_TOKEN')
-PERPLEXITY_API_KEY = userdata.get('PERPLEXITY_API_KEY')
-
 ## CONSTANTS
 
 SUBMIT_PREDICTION = True # set to True to publish your predictions to Metaculus
