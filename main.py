@@ -1808,7 +1808,19 @@ def list_questions(tournament_id, offset=0, count=50) -> list[dict]:
         raise Exception(response.text)
     data = json.loads(response.content)
     return data
-
+def get_post_details(post_id: int) -> dict:
+    #"""
+    #Get all details about a post from the Metaculus API.
+    #"""
+    url = f"{API_BASE_URL}/posts/{post_id}/"
+    print(f"Getting details for {url}")
+    response = requests.get(
+        url,
+        **AUTH_HEADERS,  # type: ignore
+    )
+    if not response.ok:
+        raise Exception(response.text)
+    return json.loads(response.content)
 # Cell 3
 TOURNAMENT_ID = 32506  # 32506 is the tournament ID for Q4 AI Benchmarking
 #TOURNAMENT_ID = 3672 # Quarterly Cup
@@ -1831,6 +1843,7 @@ for post in posts["results"]:
 
 open_question_id_post_id = [] # [(question_id, post_id)]
 new_question_id_post_id = []
+new_questions_ids = []
 for post_id, questions in post_dict.items():
     for question in questions:
         if question.get("status") == "open":
@@ -1839,24 +1852,9 @@ for post_id, questions in post_dict.items():
               f"{question['scheduled_close_time']}"
           )
           open_question_id_post_id.append((question["id"], post_id))
-
-questions=list_questions(TOURNAMENT_ID)
-new_questions_ids = []
-open_questions_ids = []
-for question in questions["results"]:
-    if question["status"] == "open":
-        print(f"ID: {question['id']}\nQ: {question['title']}\nCloses: {question['scheduled_close_time']}")
-        open_questions_ids.append(question["id"])
-
-        # Check if you've made a prediction for this question
-        BASE_URL = f"https://www.metaculus.com/api2"
-        guess_response = requests.get(
-            f"{BASE_URL}/questions/{question['id']}/",
-            headers={"Authorization": f"Token {METACULUS_TOKEN}"}
-        )
-        guess_response.raise_for_status()
-
-        if not guess_response.json().get("question", {}).get("my_forecasts", {}).get("latest"):
+          post_details = get_post_details(post_id)
+          forecast_values = post_details["question"]["my_forecasts"]["latest"]
+          if not forecast_values:
             new_questions_ids.append(question["id"])
 
 print(f"New questions without predictions: {len(new_questions_ids)}")
