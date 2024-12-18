@@ -1861,7 +1861,7 @@ print(f"New questions without predictions: {len(new_questions_ids)}")
 print(new_questions_ids)
 
 new_question_id_post_id = [
-    entry for entry in open_question_id_post_id if entry[1] in new_questions_ids
+    entry for entry in open_question_id_post_id if entry[0] in new_questions_ids
 ]
 
 print("Matching Entries:")
