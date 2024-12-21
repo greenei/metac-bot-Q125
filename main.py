@@ -1551,8 +1551,9 @@ def extract_percentiles_from_response(forecast_text: str) -> float:
         pattern = r'^.*(?:P|p)ercentile.*$'
 
         # Number extraction pattern
-        number_pattern = r'-?\d+(?:,\d{3})*(?:\.\d+)?'
-
+        # OLD: number_pattern = r'-?\d+(?:,\d{3})*(?:\.\d+)?'
+        number_pattern = r"-\s*(?:[^\d\-]*\s*)?(\d+(?:,\d{3})*(?:\.\d+)?)|(\d+(?:,\d{3})*(?:\.\d+)?)"
+        
         results = []
 
         # Iterate through each line in the text
@@ -1561,15 +1562,19 @@ def extract_percentiles_from_response(forecast_text: str) -> float:
             if re.match(pattern, line):
                 # Extract all numbers from the line
                 numbers = re.findall(number_pattern, line)
-                numbers_no_commas = [num.replace(',', '') for num in numbers]
+                numbers_no_commas = [
+                    next(num for num in match if num).replace(",", "")
+                    for match in numbers
+                ]
                 # Convert strings to float or int
                 numbers = [float(num) if '.' in num else int(num) for num in numbers_no_commas]
                 # Add the tuple of numbers to results
                 if len(numbers) > 1:
-                  first_number = numbers[0]
-                  last_number = numbers[-1]
-                  tup = [first_number, last_number]
-                  results.append(tuple(tup))
+                      first_number = numbers[0]
+                      last_number = numbers[-1]
+                      if "-" in line.split(":")[-1]:
+                            last_number = -abs(last_number)
+                      results.append((first_number, last_number))
 
         # Convert results to dictionary
         percentile_values = {}
