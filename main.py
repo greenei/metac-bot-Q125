@@ -1834,7 +1834,8 @@ def get_post_details(post_id: int) -> dict:
         raise Exception(response.text)
     return json.loads(response.content)
 # Cell 3
-TOURNAMENT_ID = 32506  # 32506 is the tournament ID for Q4 AI Benchmarking
+TOURNAMENT_ID = 32627 # Q1 AI Benchmarking
+#TOURNAMENT_ID = 32506  # 32506 is the tournament ID for Q4 AI Benchmarking
 #TOURNAMENT_ID = 3672 # Quarterly Cup
 #TOURNAMENT_ID = 2844 # ACX for testing
 
