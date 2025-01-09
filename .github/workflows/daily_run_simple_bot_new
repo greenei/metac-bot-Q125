@@ -1,0 +1,85 @@
+name: Regularly forecast new questions
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *" # runs every 15 minutes
+
+# Add concurrency to ensure only one workflow runs at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  daily_build:
+    runs-on: ubuntu-latest
+
+    # Add outputs to track job status
+    outputs:
+      job_status: ${{ steps.run-bot.outputs.status }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        run: |
+          poetry lock
+          poetry install --no-interaction --no-root
+
+      # Add check for previous run status
+      - name: Check previous run status
+        id: check-status
+        run: |
+          if [ -f .last_run_status ]; then
+            if [ "$(cat .last_run_status)" = "failed" ]; then
+              echo "Previous run failed. Skipping this run."
+              exit 1
+            fi
+          fi
+
+      - name: Run bot
+        id: run-bot
+        continue-on-error: true
+        run: |
+          if poetry run python main.py; then
+            echo "success" > .last_run_status
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "failed" > .last_run_status
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+        env:
+          METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }}
+          ASKNEWS_CLIENT_ID: ${{ secrets.ASKNEWS_CLIENT_ID }}
+          ASKNEWS_SECRET: ${{ secrets.ASKNEWS_SECRET }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+
+      # Add step to commit status file
+      - name: Commit status file
+        if: always()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .last_run_status
+          git commit -m "Update last run status" || echo "No changes to commit"
+          git push
