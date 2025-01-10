@@ -14,7 +14,6 @@ jobs:
   daily_build:
     runs-on: ubuntu-latest
 
-    # Add outputs to track job status
     outputs:
       job_status: ${{ steps.run-bot.outputs.status }}
 
@@ -45,13 +44,14 @@ jobs:
           poetry lock
           poetry install --no-interaction --no-root
 
-      # Add check for previous run status
+      # Check previous run status only for scheduled runs
       - name: Check previous run status
+        if: github.event_name == 'schedule'
         id: check-status
         run: |
           if [ -f .last_run_status ]; then
             if [ "$(cat .last_run_status)" = "failed" ]; then
-              echo "Previous run failed. Skipping this run."
+              echo "Previous run failed. Skipping this scheduled run."
               exit 1
             fi
           fi
