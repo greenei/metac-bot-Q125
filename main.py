@@ -10,11 +10,11 @@ import time
 import anthropic
 import numpy as np
 ## CONSTANTS
-SUBMIT_PREDICTION = False # set to True to publish your predictions to Metaculus
-FORECAST_TOURNAMENT = False # set to True to forecast all tournament questions
+SUBMIT_PREDICTION = True # set to True to publish your predictions to Metaculus
+FORECAST_TOURNAMENT = True # set to True to forecast all tournament questions
 GET_NEWS = True # set to True to enable AskNews after entering ASKNEWS secrets
 num_runs=5 # number of times to run the LLM
-ONLY_NEW=0 # Only predict on new questions
+ONLY_NEW=1 # Only predict on new questions
 
 # Environment variables
 METACULUS_TOKEN = os.getenv("METACULUS_TOKEN")
