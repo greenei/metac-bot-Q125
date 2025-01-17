@@ -10,11 +10,11 @@ import time
 import anthropic
 import numpy as np
 ## CONSTANTS
-SUBMIT_PREDICTION = True # set to True to publish your predictions to Metaculus
-FORECAST_TOURNAMENT = True # set to True to forecast all tournament questions
+SUBMIT_PREDICTION = False # set to True to publish your predictions to Metaculus
+FORECAST_TOURNAMENT = False # set to True to forecast all tournament questions
 GET_NEWS = True # set to True to enable AskNews after entering ASKNEWS secrets
 num_runs=5 # number of times to run the LLM
-ONLY_NEW=1 # Only predict on new questions
+ONLY_NEW=0 # Only predict on new questions
 
 # Environment variables
 METACULUS_TOKEN = os.getenv("METACULUS_TOKEN")
@@ -898,7 +898,7 @@ def get_gpt_prediction(question_details: dict,question_id, num_runs: int = 1) ->
       summary_report=summary_report,
       options=options
   )
-      url = "https://www.metaculus.com/proxy/anthropic/v1/messages/"
+      url = "https://llm-proxy.metaculus.com/proxy/anthropic/v1/messages/"
       headers = {
           "Authorization": f"Token {METACULUS_TOKEN}",
           "anthropic-version": "2023-06-01",
@@ -1183,7 +1183,7 @@ IMPORTANT: YOUR LAST WORD MUST BE THE ID AND NOTHING ELSE. THIS IS VERY IMPORTAN
         retry_delay = 5
         for attempt in range(max_retries):
             try:
-                url = "https://www.metaculus.com/proxy/anthropic/v1/messages/"
+                url = "https://llm-proxy.metaculus.com/proxy/anthropic/v1/messages/"
 
                 headers = {
                     "Authorization": f"Token {METACULUS_TOKEN}",
@@ -1378,7 +1378,7 @@ def get_prior(question_details: dict) -> str:
         print(content)
         print(f"\n\n----END PRIOR PROMPT----")
 
-    url = "https://www.metaculus.com/proxy/anthropic/v1/messages/"
+    url = "https://llm-proxy.metaculus.com/proxy/anthropic/v1/messages/"
 
     headers = {
         "Authorization": f"Token {METACULUS_TOKEN}",
@@ -1923,7 +1923,7 @@ for question_id, post_id in forecast_questions_ids:
 
   print(f"Forecast: {forecast}")
   print(f"Comment: {comment}")
-
-  forecast_payload = create_forecast_payload(forecast, question_type)
-  post_question_prediction(question_details["id"], forecast_payload)
-  post_question_comment(post_id, comment)
+  if SUBMIT_PREDICTION:
+      forecast_payload = create_forecast_payload(forecast, question_type)
+      post_question_prediction(question_details["id"], forecast_payload)
+      post_question_comment(post_id, comment)
