@@ -384,15 +384,13 @@ IMPORTANT: If he used Metaculus predictions and they were highly relevant to the
 
 4. Did he use all important information?
 
-5. Did he properly assess the importance of different pieces of information?
+5. Did he properly assess the importance of different pieces of information? If assistants disagree, their info should not be relied on too strongly!
 
 6. Did he properly consider the available timeframe until the question is resolved? Pay special attention to this. Many questions have a short timeframe, which strongly limits the probability
 that the question resolves positively. Reason through this in detail. IMPORTANT: If the question asks about an event that has already resolved but you don't know how, a reasonable estimate should
 nevertheless be provided. Do not answer 0% in this case!
 
-7. Are the predictions consistent with the predictions for the other questions?
-
-8. Did the assisstants agree or disagree? Did the forecaster handle major disagreement with care by updating less strongly on the assistants' information?
+7. Did the assisstants agree or disagree? Did the forecaster handle major disagreement with care by updating less strongly on the assistants' information?
 
 Here is the forecaster's rationale:
 
@@ -459,7 +457,7 @@ IMPORTANT: If he used Metaculus predictions and they were highly relevant to the
 
 4. Did he use all important information?
 
-5. Did he properly assess the importance of different pieces of information?
+5. Did he properly assess the importance of different pieces of information? If assistants disagree, their info should not be relied on too strongly!
 
 6. Did he properly consider the available timeframe until the question is resolved? Pay special attention to this. Many questions have a short timeframe, which strongly limits the probability
 that things change from their current situation! Reason through this in detail. IMPORTANT: If the question asks about an event that has already resolved but you don't know how, a reasonable estimate should
@@ -550,7 +548,7 @@ IMPORTANT: If he used Metaculus predictions and they were highly relevant to the
 
 3. Is the forecaster's logic sound?
 
-4. Did he use all important information?
+4. Did he use all important information? If assistants disagree, their info should not be relied on too strongly!
 
 5. Did he properly assess the importance of different pieces of information?
 
