@@ -212,7 +212,8 @@ Percentile 90: XX
 
 Do not put "%" or any other unit after the numbers! Note that it is usually better to be careful with predictions.
 This means that low percentiles should not be too high and high percentiles should not be too low compared to your median prediction.
-Only choose very concentrated density functions if you are very sure.
+Only choose very concentrated density functions if you are very sure. 
+In particular, Percentile 10 and 90 should be chosen conservatively, i.e. Percentile 10 should be rather low and 90 rather high.
 
 """
 
@@ -528,7 +529,8 @@ Percentile 90: XX
 
 Note that it is usually better to be careful with predictions.
 This means that low percentiles should not be too high and high percentiles should not be too low compared to your median prediction.
-Only choose very concentrated density functions if you are very sure.
+Only choose very concentrated density functions if you are very sure. 
+In particular, Percentile 10 and 90 should be chosen conservatively, i.e. Percentile 10 should be rather low and 90 rather high.
 
 """
 
